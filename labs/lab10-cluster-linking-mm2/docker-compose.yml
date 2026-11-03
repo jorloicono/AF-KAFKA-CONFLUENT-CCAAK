@@ -1,0 +1,73 @@
+# =============================================================================
+# Lab 10 · Replicación entre clústeres: Cluster Linking (failover) y MirrorMaker 2
+#
+#  madrid     clúster de origen (un nodo KRaft)            bootstrap madrid:29092
+#  valencia   clúster de DR (un nodo, Confluent Server)    bootstrap valencia:29092
+#  mm2        MirrorMaker 2 en modo dedicado (perfil "mm2")
+#
+# Cluster Linking es una función de Confluent Server (licencia Enterprise,
+# 30 días de prueba) o de Confluent Cloud; el origen puede ser Apache Kafka.
+# =============================================================================
+name: kafka-lab10
+
+x-kafka-env: &kafka-env
+  KAFKA_NODE_ID: 1
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+  KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+  KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+  KAFKA_MIN_INSYNC_REPLICAS: 1
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+  KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+  KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+  KAFKA_CONFLUENT_CLUSTER_LINK_ENABLE: "true"
+  KAFKA_CONFLUENT_CLUSTER_LINK_METADATA_TOPIC_REPLICATION_FACTOR: 1
+  KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+
+services:
+  madrid:
+    image: confluentinc/cp-server:7.9.0
+    hostname: madrid
+    container_name: madrid
+    volumes:
+      - ../../comun/scripts:/scripts:ro
+      - ./:/lab:ro
+    environment:
+      <<: *kafka-env
+      CLUSTER_ID: "NqON7NHCQuaqk7o5-OJDeg"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@madrid:29093"
+      KAFKA_LISTENERS: "PLAINTEXT://madrid:29092,CONTROLLER://madrid:29093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://madrid:29092"
+
+  valencia:
+    image: confluentinc/cp-server:7.9.0
+    hostname: valencia
+    container_name: valencia
+    volumes:
+      - ../../comun/scripts:/scripts:ro
+      - ./:/lab:ro
+    environment:
+      <<: *kafka-env
+      CLUSTER_ID: "K8C9WofXQGmUx3Jh_c6GFg"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@valencia:29093"
+      KAFKA_LISTENERS: "PLAINTEXT://valencia:29092,CONTROLLER://valencia:29093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://valencia:29092"
+
+  mm2:
+    image: confluentinc/cp-server:7.9.0
+    hostname: mm2
+    container_name: mm2
+    profiles: ["mm2"]
+    depends_on: [madrid, valencia]
+    entrypoint: ["connect-mirror-maker", "/lab/mm2.properties"]
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+    volumes:
+      - ./:/lab:ro

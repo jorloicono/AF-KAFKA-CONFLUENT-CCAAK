@@ -1,0 +1,79 @@
+# Directorio del laboratorio RBAC (base dc=formacion,dc=local)
+# Usuarios: superuser, alice, bob, carol, dave
+# Grupos:   flota-devs (alice, carol) · analistas (bob)
+
+dn: ou=users,dc=formacion,dc=local
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=groups,dc=formacion,dc=local
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=superuser,ou=users,dc=formacion,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: superuser
+cn: superuser
+sn: Administrador
+uidNumber: 10000
+gidNumber: 5000
+homeDirectory: /home/superuser
+userPassword: superuser-secret
+
+dn: uid=alice,ou=users,dc=formacion,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: alice
+cn: alice
+sn: Desarrolladora
+uidNumber: 10001
+gidNumber: 5001
+homeDirectory: /home/alice
+userPassword: alice-secret
+
+dn: uid=bob,ou=users,dc=formacion,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: bob
+cn: bob
+sn: Analista
+uidNumber: 10002
+gidNumber: 5002
+homeDirectory: /home/bob
+userPassword: bob-secret
+
+dn: uid=carol,ou=users,dc=formacion,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: carol
+cn: carol
+sn: Desarrolladora
+uidNumber: 10003
+gidNumber: 5001
+homeDirectory: /home/carol
+userPassword: carol-secret
+
+dn: uid=dave,ou=users,dc=formacion,dc=local
+objectClass: inetOrgPerson
+objectClass: posixAccount
+uid: dave
+cn: dave
+sn: Externo
+uidNumber: 10004
+gidNumber: 5003
+homeDirectory: /home/dave
+userPassword: dave-secret
+
+dn: cn=flota-devs,ou=groups,dc=formacion,dc=local
+objectClass: posixGroup
+cn: flota-devs
+gidNumber: 5001
+memberUid: alice
+memberUid: carol
+
+dn: cn=analistas,ou=groups,dc=formacion,dc=local
+objectClass: posixGroup
+cn: analistas
+gidNumber: 5002
+memberUid: bob

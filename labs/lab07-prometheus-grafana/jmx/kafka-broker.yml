@@ -1,0 +1,52 @@
+# Reglas del JMX Exporter para Kafka: traduce MBeans a métricas Prometheus.
+# Solo exportamos las métricas que usamos en el panel y en las alertas del curso.
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+rules:
+  # --- Salud de la replicación ---
+  - pattern: kafka.server<type=ReplicaManager, name=(UnderReplicatedPartitions|UnderMinIsrPartitionCount|AtMinIsrPartitionCount|OfflineReplicaCount|PartitionCount|LeaderCount)><>Value
+    name: kafka_server_replicamanager_$1
+    type: GAUGE
+  - pattern: kafka.server<type=ReplicaManager, name=(IsrShrinksPerSec|IsrExpandsPerSec)><>Count
+    name: kafka_server_replicamanager_$1_total
+    type: COUNTER
+  # --- Controlador (en KRaft lo publican los nodos con rol controller) ---
+  - pattern: kafka.controller<type=KafkaController, name=(ActiveControllerCount|OfflinePartitionsCount|GlobalPartitionCount|GlobalTopicCount|ActiveBrokerCount|FencedBrokerCount|PreferredReplicaImbalanceCount)><>Value
+    name: kafka_controller_kafkacontroller_$1
+    type: GAUGE
+  # --- Tráfico (agregado por broker, sin etiqueta de topic) ---
+  - pattern: kafka.server<type=BrokerTopicMetrics, name=(BytesInPerSec|BytesOutPerSec|MessagesInPerSec|FailedProduceRequestsPerSec|FailedFetchRequestsPerSec|ReplicationBytesInPerSec|ReplicationBytesOutPerSec)><>Count
+    name: kafka_server_brokertopicmetrics_$1_total
+    type: COUNTER
+  # --- Latencia de peticiones (percentiles) ---
+  - pattern: kafka.network<type=RequestMetrics, name=TotalTimeMs, request=(Produce|FetchConsumer|FetchFollower)><>(\d+)thPercentile
+    name: kafka_network_requestmetrics_totaltimems
+    type: GAUGE
+    labels:
+      request: "$1"
+      quantile: "0.$2"
+  - pattern: kafka.network<type=RequestMetrics, name=RequestsPerSec, request=(Produce|FetchConsumer|FetchFollower)(?:, version=.*)?><>Count
+    name: kafka_network_requestmetrics_requests_total
+    type: COUNTER
+    labels:
+      request: "$1"
+  # --- Saturación de hilos ---
+  - pattern: kafka.server<type=KafkaRequestHandlerPool, name=RequestHandlerAvgIdlePercent><>OneMinuteRate
+    name: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent
+    type: GAUGE
+  - pattern: kafka.network<type=SocketServer, name=NetworkProcessorAvgIdlePercent><>Value
+    name: kafka_network_socketserver_networkprocessoravgidlepercent
+    type: GAUGE
+  - pattern: kafka.network<type=RequestChannel, name=RequestQueueSize><>Value
+    name: kafka_network_requestchannel_requestqueuesize
+    type: GAUGE
+  # --- Disco: tamaño de cada partición en este broker ---
+  - pattern: kafka.log<type=Log, name=Size, topic=(.+), partition=(.+)><>Value
+    name: kafka_log_log_size
+    type: GAUGE
+    labels:
+      topic: "$1"
+      partition: "$2"
+  - pattern: kafka.log<type=LogManager, name=OfflineLogDirectoryCount><>Value
+    name: kafka_log_logmanager_offlinelogdirectorycount
+    type: GAUGE

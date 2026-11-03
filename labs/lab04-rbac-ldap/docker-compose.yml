@@ -1,0 +1,115 @@
+# =============================================================================
+# Lab 4 · RBAC de Confluent Platform con usuarios y grupos en LDAP
+#
+#  openldap   directorio con usuarios (superuser, alice, bob, carol, dave) y grupos
+#  kafka1     Confluent Server en KRaft (un nodo) con Metadata Service (MDS) en :8090
+#  cliente    herramientas de Kafka + curl para lanzar las pruebas
+#
+#  Listener    Protocolo        Puerto  Uso
+#  INTERNAL    PLAINTEXT        29092   inter-broker y clientes internos (no publicado)
+#  CLIENT      SASL_PLAINTEXT   19092   usuarios LDAP con SASL/PLAIN
+#  CONTROLLER  PLAINTEXT        29093   quórum KRaft
+#
+# Antes de arrancar: generar las claves del MDS (README, paso 1).
+# Funcionalidad de Confluent Platform Enterprise: funciona 30 días sin licencia.
+# =============================================================================
+name: kafka-lab04
+
+services:
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap
+    hostname: openldap
+    command: --copy-service
+    environment:
+      LDAP_ORGANISATION: "Formacion Kafka"
+      LDAP_DOMAIN: "formacion.local"
+      LDAP_BASE_DN: "dc=formacion,dc=local"
+      LDAP_ADMIN_PASSWORD: "admin"
+    volumes:
+      - ./ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
+
+  kafka1:
+    image: confluentinc/cp-server:7.9.0
+    hostname: kafka1
+    container_name: kafka1
+    depends_on:
+      - openldap
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./secrets:/etc/kafka/secrets:ro
+    environment:
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENERS: "INTERNAL://kafka1:29092,CLIENT://kafka1:19092,CONTROLLER://kafka1:29093"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka1:29092,CLIENT://kafka1:19092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,CLIENT:SASL_PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_HEAP_OPTS: "-Xms768m -Xmx768m"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+
+      # Un solo nodo: todos los topics internos con factor de replicación 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_METADATA_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+      KAFKA_CONFLUENT_SECURITY_EVENT_LOGGER_EXPORTER_KAFKA_TOPIC_REPLICAS: 1
+      KAFKA_CONFLUENT_CLUSTER_LINK_METADATA_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_TIER_METADATA_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+
+      # --- Autenticación de clientes: SASL/PLAIN validado contra LDAP ---
+      KAFKA_SASL_ENABLED_MECHANISMS: "PLAIN"
+      KAFKA_LISTENER_NAME_CLIENT_SASL_ENABLED_MECHANISMS: "PLAIN"
+      KAFKA_LISTENER_NAME_CLIENT_PLAIN_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.plain.PlainLoginModule required;"
+      KAFKA_LISTENER_NAME_CLIENT_PLAIN_SASL_SERVER_CALLBACK_HANDLER_CLASS: "io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler"
+
+      # --- Autorización: RBAC (CONFLUENT) + ACLs de KRaft ---
+      KAFKA_AUTHORIZER_CLASS_NAME: "io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer"
+      KAFKA_CONFLUENT_AUTHORIZER_ACCESS_RULE_PROVIDERS: "CONFLUENT,KRAFT_ACL"
+      KAFKA_SUPER_USERS: "User:superuser;User:ANONYMOUS"
+
+      # --- Metadata Service (MDS) ---
+      KAFKA_CONFLUENT_METADATA_SERVER_LISTENERS: "http://0.0.0.0:8090"
+      KAFKA_CONFLUENT_METADATA_SERVER_ADVERTISED_LISTENERS: "http://kafka1:8090"
+      KAFKA_CONFLUENT_METADATA_SERVER_AUTHENTICATION_METHOD: "BEARER"
+      KAFKA_CONFLUENT_METADATA_SERVER_TOKEN_KEY_PATH: "/etc/kafka/secrets/tokenKeypair.pem"
+      KAFKA_CONFLUENT_METADATA_SERVER_PUBLIC_KEY_PATH: "/etc/kafka/secrets/public.pem"
+      KAFKA_CONFLUENT_METADATA_SERVER_TOKEN_MAX_LIFETIME_MS: 3600000
+      KAFKA_CONFLUENT_METADATA_SERVER_TOKEN_SIGNATURE_ALGORITHM: "RS256"
+
+      # --- Conexión del MDS con LDAP ---
+      KAFKA_LDAP_JAVA_NAMING_FACTORY_INITIAL: "com.sun.jndi.ldap.LdapCtxFactory"
+      KAFKA_LDAP_COM_SUN_JNDI_LDAP_READ_TIMEOUT: 3000
+      KAFKA_LDAP_JAVA_NAMING_PROVIDER_URL: "ldap://openldap:389"
+      KAFKA_LDAP_JAVA_NAMING_SECURITY_PRINCIPAL: "cn=admin,dc=formacion,dc=local"
+      KAFKA_LDAP_JAVA_NAMING_SECURITY_CREDENTIALS: "admin"
+      KAFKA_LDAP_JAVA_NAMING_SECURITY_AUTHENTICATION: "simple"
+      KAFKA_LDAP_SEARCH_MODE: "GROUPS"
+      KAFKA_LDAP_GROUP_SEARCH_BASE: "ou=groups,dc=formacion,dc=local"
+      KAFKA_LDAP_GROUP_NAME_ATTRIBUTE: "cn"
+      KAFKA_LDAP_GROUP_MEMBER_ATTRIBUTE: "memberUid"
+      KAFKA_LDAP_GROUP_OBJECT_CLASS: "posixGroup"
+      KAFKA_LDAP_USER_SEARCH_BASE: "ou=users,dc=formacion,dc=local"
+      KAFKA_LDAP_USER_NAME_ATTRIBUTE: "uid"
+      KAFKA_LDAP_USER_OBJECT_CLASS: "inetOrgPerson"
+
+  cliente:
+    image: confluentinc/cp-server:7.9.0
+    container_name: cliente
+    hostname: cliente
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - ./clientes:/clientes:ro
+      - ./:/lab:ro
+      - ../../comun/scripts:/scripts:ro

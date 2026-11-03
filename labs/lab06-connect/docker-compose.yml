@@ -1,0 +1,111 @@
+# =============================================================================
+# Lab 6 · Kafka Connect distribuido (2 workers) con un pipeline PostgreSQL -> Kafka
+#
+#  kafka1      Confluent Server KRaft (un nodo, entorno ligero)
+#  postgres    base de datos de mantenimientos de la flota      -> localhost:5432
+#  connect-1   worker Connect                                    -> http://localhost:8083
+#  connect-2   worker Connect (mismo group.id = mismo clúster)   -> http://localhost:8084
+#
+# Los workers instalan el conector JDBC desde Confluent Hub al arrancar
+# (necesitan salida a Internet la primera vez).
+# =============================================================================
+name: kafka-lab06
+
+x-kafka-ligero: &kafka-ligero
+  image: confluentinc/cp-server:7.9.0
+  hostname: kafka1
+  container_name: kafka1
+  volumes:
+    - ../../comun/scripts:/scripts:ro
+  environment:
+    CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    KAFKA_NODE_ID: 1
+    KAFKA_PROCESS_ROLES: "broker,controller"
+    KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093"
+    KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+    KAFKA_LISTENERS: "PLAINTEXT://kafka1:29092,CONTROLLER://kafka1:29093,HOST://0.0.0.0:9092"
+    KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka1:29092,HOST://localhost:9092"
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT"
+    KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+    KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+    KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    KAFKA_MIN_INSYNC_REPLICAS: 1
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+    KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+    KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+  ports:
+    - "9092:9092"
+
+x-connect-comun: &connect-comun
+  image: confluentinc/cp-kafka-connect:7.9.0
+  depends_on: [kafka1, postgres]
+  command:
+    - bash
+    - -c
+    - |
+      confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.7.6
+      /etc/confluent/docker/run
+
+x-connect-env: &connect-env
+  CONNECT_BOOTSTRAP_SERVERS: "kafka1:29092"
+  CONNECT_LISTENERS: "http://0.0.0.0:8083"
+  CONNECT_GROUP_ID: "connect-flota"
+  CONNECT_CONFIG_STORAGE_TOPIC: "_connect-configs"
+  CONNECT_OFFSET_STORAGE_TOPIC: "_connect-offsets"
+  CONNECT_STATUS_STORAGE_TOPIC: "_connect-status"
+  CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+  CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+  CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+  CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+  CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+  CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
+  CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+  CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY: "All"
+  # Con rebalanceo cooperativo, las tareas de un worker caído esperan este tiempo
+  # antes de reasignarse (por defecto 5 minutos). Lo bajamos para el laboratorio.
+  CONNECT_SCHEDULED_REBALANCE_MAX_DELAY_MS: 20000
+  CONNECT_LOG4J_LOGGERS: "org.reflections=ERROR"
+  KAFKA_HEAP_OPTS: "-Xms384m -Xmx384m"
+
+services:
+  kafka1:
+    <<: *kafka-ligero
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    hostname: postgres
+    environment:
+      POSTGRES_DB: flota
+      POSTGRES_USER: flota
+      POSTGRES_PASSWORD: flota-secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  connect-1:
+    <<: *connect-comun
+    hostname: connect-1
+    container_name: connect-1
+    ports:
+      - "8083:8083"
+    environment:
+      <<: *connect-env
+      CONNECT_REST_ADVERTISED_HOST_NAME: "connect-1"
+
+  connect-2:
+    <<: *connect-comun
+    hostname: connect-2
+    container_name: connect-2
+    ports:
+      - "8084:8083"
+    environment:
+      <<: *connect-env
+      CONNECT_REST_ADVERTISED_HOST_NAME: "connect-2"

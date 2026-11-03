@@ -1,0 +1,6 @@
+posicion-v1.avsc / peticion-v1.json : Versión inicial
+posicion-v2.avsc / peticion-v2.json : Añade 'combustible' opcional con default (compatible BACKWARD y FORWARD)
+posicion-v3.avsc / peticion-v3.json : Añade 'conductor' obligatorio SIN default (rechazado en BACKWARD, aceptado en FORWARD)
+posicion-v4.avsc / peticion-v4.json : Elimina 'velocidad', que no tiene default (rechazado en FORWARD)
+
+Los .avsc son el esquema legible; los peticion-*.json son el cuerpo listo para la API REST.

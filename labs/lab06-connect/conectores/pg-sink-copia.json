@@ -1,0 +1,22 @@
+{
+  "name": "pg-sink-copia",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "pg.mantenimientos",
+    "connection.url": "jdbc:postgresql://postgres:5432/flota",
+    "connection.user": "flota",
+    "connection.password": "flota-secret",
+    "table.name.format": "mantenimientos_copia",
+    "auto.create": "true",
+    "insert.mode": "upsert",
+    "pk.mode": "record_value",
+    "pk.fields": "id",
+    "errors.tolerance": "all",
+    "errors.deadletterqueue.topic.name": "dlq.mantenimientos",
+    "errors.deadletterqueue.topic.replication.factor": "1",
+    "errors.deadletterqueue.context.headers.enable": "true",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true"
+  }
+}

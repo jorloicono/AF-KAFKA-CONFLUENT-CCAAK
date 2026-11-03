@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "Posicion",
+  "namespace": "es.flota",
+  "fields": [
+    {
+      "name": "vehiculo_id",
+      "type": "string"
+    },
+    {
+      "name": "ts",
+      "type": "long"
+    },
+    {
+      "name": "velocidad",
+      "type": "int"
+    }
+  ]
+}

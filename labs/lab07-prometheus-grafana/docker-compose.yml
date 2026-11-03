@@ -1,0 +1,122 @@
+# =============================================================================
+# Lab 7 · Monitorización con Prometheus y Grafana
+#
+#  kafka1..3       clúster KRaft con el agente JMX Exporter (métricas en :7071)
+#  kafka-exporter  lag de los grupos de consumidores               -> :9308
+#  prometheus      recogida de métricas y reglas de alerta         -> http://localhost:9090
+#  grafana         cuadro de mando "Kafka · Curso CCAAK"           -> http://localhost:3000
+#
+# Requisito previo: bash comun/scripts/descargar-dependencias.sh
+# =============================================================================
+name: kafka-lab07
+
+x-kafka-comun: &kafka-comun
+  image: confluentinc/cp-server:7.9.0
+  restart: "no"
+  volumes:
+    - ../../comun/scripts:/scripts:ro
+    - ../../comun/descargas/jmx_prometheus_javaagent.jar:/opt/jmx/jmx_prometheus_javaagent.jar:ro
+    - ./jmx/kafka-broker.yml:/opt/jmx/kafka-broker.yml:ro
+
+x-kafka-env: &kafka-env
+  CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093,2@kafka2:29093,3@kafka3:29093"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT"
+  KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_NUM_PARTITIONS: 3
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  # Topics internos de Confluent Server
+  KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+  KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+  KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+  # El agente se pasa en EXTRA_ARGS (y no en KAFKA_OPTS) para que solo lo cargue
+  # el proceso del broker y no las herramientas CLI que lancemos dentro del contenedor.
+  EXTRA_ARGS: "-javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=7071:/opt/jmx/kafka-broker.yml"
+
+services:
+  kafka1:
+    <<: *kafka-comun
+    hostname: kafka1
+    container_name: kafka1
+    ports:
+      - "9092:9092"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: "PLAINTEXT://kafka1:29092,CONTROLLER://kafka1:29093,HOST://0.0.0.0:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka1:29092,HOST://localhost:9092"
+
+  kafka2:
+    <<: *kafka-comun
+    hostname: kafka2
+    container_name: kafka2
+    ports:
+      - "9093:9093"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: "PLAINTEXT://kafka2:29092,CONTROLLER://kafka2:29093,HOST://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka2:29092,HOST://localhost:9093"
+
+  kafka3:
+    <<: *kafka-comun
+    hostname: kafka3
+    container_name: kafka3
+    ports:
+      - "9094:9094"
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: "PLAINTEXT://kafka3:29092,CONTROLLER://kafka3:29093,HOST://0.0.0.0:9094"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka3:29092,HOST://localhost:9094"
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: kafka-exporter
+    hostname: kafka-exporter
+    restart: on-failure
+    command:
+      - "--kafka.server=kafka1:29092"
+      - "--kafka.server=kafka2:29092"
+      - "--kafka.server=kafka3:29092"
+      - "--kafka.version=3.9.0"
+    depends_on: [kafka1, kafka2, kafka3]
+    ports:
+      - "9308:9308"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    hostname: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alertas.yml:/etc/prometheus/alertas.yml:ro
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    hostname: grafana
+    depends_on: [prometheus]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/kafka-curso.json"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

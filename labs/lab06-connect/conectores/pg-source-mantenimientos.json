@@ -1,0 +1,21 @@
+{
+  "name": "pg-source-mantenimientos",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+    "tasks.max": "1",
+    "connection.url": "jdbc:postgresql://postgres:5432/flota",
+    "connection.user": "flota",
+    "connection.password": "flota-secret",
+    "table.whitelist": "mantenimientos",
+    "mode": "timestamp+incrementing",
+    "incrementing.column.name": "id",
+    "timestamp.column.name": "actualizado",
+    "topic.prefix": "pg.",
+    "poll.interval.ms": "2000",
+    "transforms": "crearClave,extraerId",
+    "transforms.crearClave.type": "org.apache.kafka.connect.transforms.ValueToKey",
+    "transforms.crearClave.fields": "id",
+    "transforms.extraerId.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
+    "transforms.extraerId.field": "id"
+  }
+}

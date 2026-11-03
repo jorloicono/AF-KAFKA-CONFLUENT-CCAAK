@@ -1,0 +1,60 @@
+groups:
+  - name: kafka-salud
+    rules:
+      - alert: BrokerCaido
+        expr: up{job="kafka"} == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "El broker {{ $labels.instance }} no responde"
+
+      - alert: ParticionesUnderReplicated
+        expr: sum(kafka_server_replicamanager_underreplicatedpartitions) > 0
+        for: 30s
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} particiones sin todas sus réplicas en el ISR"
+
+      - alert: ParticionesBajoMinIsr
+        expr: sum(kafka_server_replicamanager_underminisrpartitioncount) > 0
+        for: 10s
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $value }} particiones por debajo de min.insync.replicas: los productores con acks=all fallarán"
+
+      - alert: ParticionesOffline
+        expr: sum(kafka_controller_kafkacontroller_offlinepartitionscount) > 0
+        for: 10s
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $value }} particiones sin líder (no se puede leer ni escribir)"
+
+      - alert: ControladorActivoIncorrecto
+        expr: sum(kafka_controller_kafkacontroller_activecontrollercount) != 1
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Hay {{ $value }} controladores activos (debe haber exactamente 1)"
+
+      - alert: DirectorioDeLogsOffline
+        expr: sum(kafka_log_logmanager_offlinelogdirectorycount) > 0
+        for: 10s
+        labels: { severity: critical }
+        annotations:
+          summary: "Hay directorios de datos offline (disco lleno o con errores)"
+
+      - alert: HilosDeRedSaturados
+        expr: avg(kafka_network_socketserver_networkprocessoravgidlepercent) < 0.3
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Los hilos de red están ocupados más del 70 % del tiempo"
+
+  - name: kafka-consumidores
+    rules:
+      - alert: LagConsumidorAlto
+        expr: sum by (consumergroup) (kafka_consumergroup_lag) > 1000
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "El grupo {{ $labels.consumergroup }} acumula {{ $value }} mensajes de lag"

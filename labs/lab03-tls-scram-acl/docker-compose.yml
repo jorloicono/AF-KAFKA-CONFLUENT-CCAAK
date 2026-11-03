@@ -1,0 +1,99 @@
+# =============================================================================
+# Lab 3 · Clúster protegido con TLS, SASL/SCRAM y ACLs
+#
+#  Listener      Protocolo   Puerto   Para qué
+#  BROKER        SSL (mTLS)  29092    tráfico entre brokers y administrador con certificado
+#  CLIENT        SASL_SSL    19092    aplicaciones (usuarios SCRAM: alice, bob)
+#  CONTROLLER    PLAINTEXT   29093    quórum KRaft (red interna de Docker; en producción, SSL)
+#
+# Antes de arrancar hay que generar los certificados (ver README, paso 1).
+# =============================================================================
+name: kafka-lab03
+
+x-kafka-comun: &kafka-comun
+  image: confluentinc/cp-server:7.9.0
+  restart: "no"
+  volumes:
+    - ./secrets:/etc/kafka/secrets:ro
+    - ./jaas:/etc/kafka/jaas:ro
+
+x-kafka-env: &kafka-env
+  CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093,2@kafka2:29093,3@kafka3:29093"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_INTER_BROKER_LISTENER_NAME: "BROKER"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,BROKER:SSL,CLIENT:SASL_SSL"
+  KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+  KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+  KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+  # --- TLS (mismos almacenes para todos los listeners SSL / SASL_SSL) ---
+  KAFKA_SSL_TRUSTSTORE_LOCATION: "/etc/kafka/secrets/kafka.truststore.jks"
+  KAFKA_SSL_TRUSTSTORE_PASSWORD: "confluent"
+  KAFKA_SSL_KEY_PASSWORD: "confluent"
+  KAFKA_SSL_KEYSTORE_PASSWORD: "confluent"
+  KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: "https"
+  KAFKA_LISTENER_NAME_BROKER_SSL_CLIENT_AUTH: "required"
+  KAFKA_SSL_PRINCIPAL_MAPPING_RULES: "RULE:^CN=([^,]+),.*$$/$$1/,DEFAULT"
+  # --- SASL/SCRAM en el listener CLIENT ---
+  KAFKA_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+  KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/jaas/broker_jaas.conf"
+  # --- Autorización con ACLs (autorizador nativo de KRaft) ---
+  KAFKA_AUTHORIZER_CLASS_NAME: "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
+  KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+  # ANONYMOUS solo es posible en el listener CONTROLLER, que no se publica.
+  KAFKA_SUPER_USERS: "User:kafka1;User:kafka2;User:kafka3;User:admin;User:ANONYMOUS"
+
+services:
+  kafka1:
+    <<: *kafka-comun
+    hostname: kafka1
+    container_name: kafka1
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: "BROKER://kafka1:29092,CLIENT://kafka1:19092,CONTROLLER://kafka1:29093"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://kafka1:29092,CLIENT://kafka1:19092"
+      KAFKA_SSL_KEYSTORE_LOCATION: "/etc/kafka/secrets/kafka1.keystore.jks"
+
+  kafka2:
+    <<: *kafka-comun
+    hostname: kafka2
+    container_name: kafka2
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: "BROKER://kafka2:29092,CLIENT://kafka2:19092,CONTROLLER://kafka2:29093"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://kafka2:29092,CLIENT://kafka2:19092"
+      KAFKA_SSL_KEYSTORE_LOCATION: "/etc/kafka/secrets/kafka2.keystore.jks"
+
+  kafka3:
+    <<: *kafka-comun
+    hostname: kafka3
+    container_name: kafka3
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: "BROKER://kafka3:29092,CLIENT://kafka3:19092,CONTROLLER://kafka3:29093"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://kafka3:29092,CLIENT://kafka3:19092"
+      KAFKA_SSL_KEYSTORE_LOCATION: "/etc/kafka/secrets/kafka3.keystore.jks"
+
+  # Contenedor "cliente" con las herramientas de Kafka, sin proceso de broker.
+  cliente:
+    image: confluentinc/cp-server:7.9.0
+    container_name: cliente
+    hostname: cliente
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - ./secrets:/secrets:ro
+      - ./clientes:/clientes:ro
+      - ../../comun/scripts:/scripts:ro

@@ -1,0 +1,98 @@
+# =============================================================================
+# Lab 12 · Flink SQL sobre los topics de la flota
+#
+#  kafka1        Confluent Server KRaft (un nodo, entorno ligero)
+#  jobmanager    Flink JobManager (interfaz web en http://localhost:8081)
+#  taskmanager   Flink TaskManager (4 slots)
+#  sql-client    cliente SQL:  docker compose run --rm sql-client
+#
+# Requisito previo: bash comun/scripts/descargar-dependencias.sh
+# (descarga el conector de Kafka para Flink SQL en comun/descargas/)
+# =============================================================================
+name: kafka-lab12
+
+x-kafka-ligero: &kafka-ligero
+  image: confluentinc/cp-server:7.9.0
+  hostname: kafka1
+  container_name: kafka1
+  volumes:
+    - ../../comun/scripts:/scripts:ro
+  environment:
+    CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    KAFKA_NODE_ID: 1
+    KAFKA_PROCESS_ROLES: "broker,controller"
+    KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093"
+    KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+    KAFKA_LISTENERS: "PLAINTEXT://kafka1:29092,CONTROLLER://kafka1:29093,HOST://0.0.0.0:9092"
+    KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka1:29092,HOST://localhost:9092"
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT"
+    KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+    KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+    KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    KAFKA_MIN_INSYNC_REPLICAS: 1
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+    KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+    KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+  ports:
+    - "9092:9092"
+
+x-flink-comun: &flink-comun
+  image: flink:1.20.1
+  volumes:
+    - ../../comun/descargas/flink-sql-connector-kafka.jar:/opt/flink/lib/flink-sql-connector-kafka.jar:ro
+    - checkpoints:/checkpoints
+    - ./sql:/sql:ro
+
+x-flink-props: &flink-props |
+  jobmanager.rpc.address: jobmanager
+  rest.address: jobmanager
+  taskmanager.numberOfTaskSlots: 4
+  parallelism.default: 3
+  execution.checkpointing.interval: 10s
+  state.checkpoints.dir: file:///checkpoints/checkpoints
+  state.savepoints.dir: file:///checkpoints/savepoints
+  restart-strategy.type: fixed-delay
+  restart-strategy.fixed-delay.attempts: 10
+  restart-strategy.fixed-delay.delay: 5s
+  table.exec.source.idle-timeout: 10s
+
+services:
+  kafka1:
+    <<: *kafka-ligero
+
+  jobmanager:
+    <<: *flink-comun
+    hostname: jobmanager
+    container_name: jobmanager
+    # Prepara el volumen de checkpoints (propiedad del usuario flink) y arranca
+    entrypoint: ["bash", "-c", "mkdir -p /checkpoints/checkpoints /checkpoints/savepoints && chown -R flink:flink /checkpoints && exec /docker-entrypoint.sh jobmanager"]
+    ports:
+      - "8081:8081"
+    environment:
+      FLINK_PROPERTIES: *flink-props
+
+  taskmanager:
+    <<: *flink-comun
+    hostname: taskmanager
+    container_name: taskmanager
+    entrypoint: ["bash", "-c", "mkdir -p /checkpoints/checkpoints /checkpoints/savepoints && chown -R flink:flink /checkpoints && exec /docker-entrypoint.sh taskmanager"]
+    depends_on: [jobmanager]
+    environment:
+      FLINK_PROPERTIES: *flink-props
+
+  sql-client:
+    <<: *flink-comun
+    command: bin/sql-client.sh -i /sql/01-tablas.sql
+    depends_on: [jobmanager]
+    profiles: ["cliente"]
+    environment:
+      FLINK_PROPERTIES: *flink-props
+
+volumes:
+  checkpoints:

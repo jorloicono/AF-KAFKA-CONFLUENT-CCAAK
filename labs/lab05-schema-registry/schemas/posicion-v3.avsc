@@ -1,0 +1,31 @@
+{
+  "type": "record",
+  "name": "Posicion",
+  "namespace": "es.flota",
+  "fields": [
+    {
+      "name": "vehiculo_id",
+      "type": "string"
+    },
+    {
+      "name": "ts",
+      "type": "long"
+    },
+    {
+      "name": "velocidad",
+      "type": "int"
+    },
+    {
+      "name": "combustible",
+      "type": [
+        "null",
+        "int"
+      ],
+      "default": null
+    },
+    {
+      "name": "conductor",
+      "type": "string"
+    }
+  ]
+}

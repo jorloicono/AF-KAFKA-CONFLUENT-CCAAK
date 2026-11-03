@@ -1,0 +1,71 @@
+# =============================================================================
+# Lab 11 · ksqlDB: streams, tablas y consultas persistentes sobre los datos de la flota
+#
+#  kafka1          Confluent Server KRaft (un nodo, entorno ligero)
+#  ksqldb-server   servidor ksqlDB (API REST en http://localhost:8088)
+#  ksqldb-cli      cliente interactivo:  docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
+# =============================================================================
+name: kafka-lab11
+
+x-kafka-ligero: &kafka-ligero
+  image: confluentinc/cp-server:7.9.0
+  hostname: kafka1
+  container_name: kafka1
+  volumes:
+    - ../../comun/scripts:/scripts:ro
+  environment:
+    CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    KAFKA_NODE_ID: 1
+    KAFKA_PROCESS_ROLES: "broker,controller"
+    KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka1:29093"
+    KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+    KAFKA_LISTENERS: "PLAINTEXT://kafka1:29092,CONTROLLER://kafka1:29093,HOST://0.0.0.0:9092"
+    KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka1:29092,HOST://localhost:9092"
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT"
+    KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+    KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+    KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    KAFKA_MIN_INSYNC_REPLICAS: 1
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+    KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
+    KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+    KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+  ports:
+    - "9092:9092"
+
+services:
+  kafka1:
+    <<: *kafka-ligero
+
+  ksqldb-server:
+    image: confluentinc/cp-ksqldb-server:7.9.0
+    hostname: ksqldb-server
+    container_name: ksqldb-server
+    depends_on: [kafka1]
+    ports:
+      - "8088:8088"
+    environment:
+      KSQL_LISTENERS: "http://0.0.0.0:8088"
+      KSQL_BOOTSTRAP_SERVERS: "kafka1:29092"
+      KSQL_KSQL_SERVICE_ID: "flota_"
+      KSQL_KSQL_INTERNAL_TOPIC_REPLICAS: 1
+      KSQL_KSQL_STREAMS_REPLICATION_FACTOR: 1
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
+      KSQL_KSQL_STREAMS_CACHE_MAX_BYTES_BUFFERING: 0
+      KSQL_HEAP_OPTS: "-Xms512m -Xmx512m"
+
+  ksqldb-cli:
+    image: confluentinc/cp-ksqldb-cli:7.9.0
+    container_name: ksqldb-cli
+    depends_on: [ksqldb-server]
+    entrypoint: /bin/sh
+    tty: true
+    volumes:
+      - ./sql:/sql:ro
