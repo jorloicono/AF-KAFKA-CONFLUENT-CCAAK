@@ -52,6 +52,8 @@ kafka-console-consumer --bootstrap-server kafka1:29092 --topic repaso.durabilida
   --group repaso-calentamiento --from-beginning --timeout-ms 5000
 ```
 
+Terminará con un `ERROR ... TimeoutException` y `Processed a total of 0 messages`. Es lo normal: el topic está vacío y `--timeout-ms` corta la espera.
+
 Desde fuera del contenedor, detén un broker:
 
 ```bash
@@ -76,7 +78,7 @@ echo 'V002|{"vehiculo_id":"V002","velocidad":80}' | kafka-console-producer \
   --property parse.key=true --property key.separator='|' --producer-property acks=1
 
 kafka-console-consumer --bootstrap-server kafka1:29092 --topic repaso.durabilidad \
-  --from-beginning --timeout-ms 10000 --property print.key=true
+  --from-beginning --timeout-ms 30000 --property print.key=true
 ```
 
 **Explica.** ¿Por qué la combinación de referencia es 3, 2 y `all`, y no 3, 3 y `all`? (Lo comprobamos al final del reto 2.)
@@ -91,7 +93,7 @@ kafka-topics --bootstrap-server kafka1:29092 --describe --under-min-isr-partitio
 kafka-topics --bootstrap-server kafka1:29092 --describe --unavailable-partitions
 ```
 
-La primera lista sale larga porque incluye las 50 particiones de `__consumer_offsets`: búscate entre ellas. `repaso.durabilidad` debería salir en las dos primeras, y la partición de `repaso.rf1` que vivía en el broker 2, en la tercera, con `Leader: none`.
+La primera lista sale muy larga porque incluye `__consumer_offsets` y los topics internos de Confluent Server (`_confluent-link-metadata`, `_confluent-telemetry-metrics`, `_confluent-command`): busca entre ellos tus topics. En la segunda lista hay una sorpresa: ¿por qué aparecen también las particiones sanas de `repaso.rf1`? `repaso.durabilidad` debería salir en las dos primeras, y la partición de `repaso.rf1` que vivía en el broker 2, en la tercera, con `Leader: none`.
 
 Ahora baja `min.insync.replicas` a 2, que es el valor de referencia, y vuelve a producir con `acks=all` con el mismo comando del reto 1:
 
