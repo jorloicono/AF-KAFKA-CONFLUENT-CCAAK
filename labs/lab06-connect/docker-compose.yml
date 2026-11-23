@@ -49,7 +49,7 @@ x-connect-comun: &connect-comun
     - bash
     - -c
     - |
-      confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.7.6
+      confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.7.16 || confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:latest
       /etc/confluent/docker/run
 
 x-connect-env: &connect-env

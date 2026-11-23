@@ -12,5 +12,7 @@ SHOW PROPERTIES;
 -- DROP STREAM excesos_velocidad DELETE TOPIC;
 
 -- Log de procesamiento: errores de deserialización, etc.
-SET 'auto.offset.reset' = 'earliest';
-SELECT * FROM KSQL_PROCESSING_LOG EMIT CHANGES LIMIT 3;
+-- Ejecútalo DESPUÉS de enviar el mensaje defectuoso del paso 5: si no hay errores,
+-- la consulta se queda esperando indefinidamente.
+-- SET 'auto.offset.reset' = 'earliest';
+-- SELECT * FROM KSQL_PROCESSING_LOG EMIT CHANGES LIMIT 3;

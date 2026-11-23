@@ -63,6 +63,7 @@ Los simulacros por bloque y el simulacro final están en `03_Simulacros_por_bloq
 | 11 | `labs/lab11-ksqldb` | 9 | ksqlDB: streams, tablas, consultas persistentes |
 | 12 | `labs/lab12-flink-sql` | 9 | Flink SQL, jobs persistentes y checkpoints |
 | 13 | `labs/lab13-terraform-confluent-cloud` | 10 | Terraform con Confluent Cloud |
+| 14 | `labs/lab14-repaso-general` | Sesión 13 | Repaso general sobre el clúster del Lab 1: predecir, comprobar y explicar |
 
 Cada carpeta tiene su `README.md` con la guía paso a paso y su `docker-compose.yml`. Entre un laboratorio y otro, ejecuta `docker compose down -v` en la carpeta del anterior: varios laboratorios usan los mismos nombres de contenedor y los mismos puertos.
 

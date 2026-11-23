@@ -49,11 +49,13 @@ x-flink-comun: &flink-comun
     - checkpoints:/checkpoints
     - ./sql:/sql:ro
 
+# Paralelismo 1: con 4 slots caben los tres jobs persistentes y una consulta interactiva.
+# Con paralelismo 3, cada job ocupa 3 slots y el segundo job ya no encuentra recursos.
 x-flink-props: &flink-props |
   jobmanager.rpc.address: jobmanager
   rest.address: jobmanager
   taskmanager.numberOfTaskSlots: 4
-  parallelism.default: 3
+  parallelism.default: 1
   execution.checkpointing.interval: 10s
   state.checkpoints.dir: file:///checkpoints/checkpoints
   state.savepoints.dir: file:///checkpoints/savepoints

@@ -72,7 +72,7 @@ Sal del cliente (`exit`) y lista los topics desde el broker:
 docker exec kafka1 kafka-topics --bootstrap-server kafka1:29092 --list
 ```
 
-Además de los topics de salida que hemos nombrado (`flota.excesos`, `flota.posiciones.enriquecidas`, `flota.velocidad.5min`...), verás varios tipos de topics internos, todos con el prefijo `_confluent-ksql-flota_`, que viene del `ksql.service.id`. El topic `_confluent-ksql-flota_command_topic` guarda todas las sentencias DDL y es la fuente de verdad del servidor: si se reinicia, reconstruye todas sus consultas leyéndolo. Los topics `...-changelog` respaldan los almacenes de estado (RocksDB) de las agregaciones, y los `...-repartition` aparecen cuando una consulta cambia la clave, como en `GROUP BY base`. Todos los servidores ksqlDB que comparten `ksql.service.id` forman un mismo clúster y se reparten el trabajo.
+Además de los topics de salida que hemos nombrado (`flota.excesos`, `flota.posiciones.enriquecidas`, `flota.velocidad.5min`...), verás varios tipos de topics internos, todos con el prefijo `_confluent-ksql-flota_`, que viene del `ksql.service.id`. El topic `_confluent-ksql-flota__command_topic` guarda todas las sentencias DDL y es la fuente de verdad del servidor: si se reinicia, reconstruye todas sus consultas leyéndolo. Los topics `...-changelog` respaldan los almacenes de estado (RocksDB) de las agregaciones, y los `...-repartition` aparecen cuando una consulta cambia la clave, como en `GROUP BY base`. Todos los servidores ksqlDB que comparten `ksql.service.id` forman un mismo clúster y se reparten el trabajo.
 
 ## Paso 5 · Administración
 

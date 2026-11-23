@@ -40,7 +40,7 @@ El enlace se crea siempre en el clúster de destino, que es el que tira de los d
 docker exec -it valencia bash
 cat /lab/link.properties
 kafka-cluster-links --bootstrap-server valencia:29092 --create --link madrid-a-valencia \
-  --config-file /lab/link.properties
+  --config-file /lab/link.properties --consumer-group-filters-json-file /lab/grupos.json
 kafka-cluster-links --bootstrap-server valencia:29092 --list
 ```
 
